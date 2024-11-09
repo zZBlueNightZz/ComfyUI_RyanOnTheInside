@@ -232,6 +232,7 @@ from .nodes.depth.depth_base import(
 from .nodes.flex.feature_externals import (
     FeatureToWeightsStrategy,
     FeatureToSplineData,
+    TextListToSplineData,
     SplineFeatureModulator,
     SplineRhythmModulator,
     DepthShapeModifier,
@@ -404,6 +405,7 @@ NODE_CLASS_MAPPINGS = {
 
     "FeatureToWeightsStrategy":     FeatureToWeightsStrategy,
     "FeatureToSplineData":         FeatureToSplineData,
+    "TextListToSplineData":         TextListToSplineData,
     "SplineFeatureModulator":      SplineFeatureModulator,
     "SplineRhythmModulator":      SplineRhythmModulator,
     "DepthInjection":               DepthInjection,
@@ -541,6 +543,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageScaleToTarget": "Upscale To Target",
 
     "FeatureToSplineData": "***BETA*** Feature To Spline Data",
+    "TextListToSplineData": "***BETA*** Text List To Spline Data",
     "SplineFeatureModulator": "***BETA*** Spline Feature Modulator",
     "SplineRhythmModulator": "***BETA*** Spline Rhythm Modulator",
 

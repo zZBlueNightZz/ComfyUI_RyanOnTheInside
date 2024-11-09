@@ -672,3 +672,122 @@ class DepthShapeModifierPrecise(FlexExternalModulator):
                 strength *= value
         return gradient_steepness, depth_min, depth_max, strength
     
+
+class TextListToSplineData(FlexExternalModulator):
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "text_list_1": ("STRING", {"multiline": False}),
+                "text_list_2": ("STRING", {"multiline": False}),
+                "text_list_3": ("STRING", {"multiline": False}),
+                "text_list_4": ("STRING", {"multiline": False}),
+                "text_list_5": ("STRING", {"multiline": False}),
+                "mask_width": ("INT", {"default": 512, "min": 8, "max": 4096, "step": 8}),
+                "mask_height": ("INT", {"default": 512, "min": 8, "max": 4096, "step": 8}),
+                "sampling_method": (
+                    [
+                        'path',
+                        'time',
+                        'controlpoints'
+                    ],
+                    {
+                        "default": 'time'
+                    }
+                ),
+                "interpolation": (
+                    [
+                        'cardinal',
+                        'monotone',
+                        'basis',
+                        'linear',
+                        'step-before',
+                        'step-after',
+                        'polar',
+                        'polar-reverse',
+                    ],
+                    {
+                        "default": 'cardinal'
+                    }
+                ),
+                "tension": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "repeat_output": ("INT", {"default": 1, "min": 1, "max": 4096, "step": 1}),
+                "float_output_type": (
+                    [
+                        'list',
+                        'pandas series',
+                        'tensor',
+                    ],
+                    {
+                        "default": 'list'
+                    }
+                ),
+            },
+            "optional": {
+                "min_value": ("FLOAT", {"default": 0.0, "min": -10000.0, "max": 10000.0, "step": 0.01}),
+                "max_value": ("FLOAT", {"default": 1.0, "min": -10000.0, "max": 10000.0, "step": 0.01}),
+            }
+        }
+
+    RETURN_TYPES = ("MASK", "STRING", "FLOAT", "INT", "STRING",)
+    RETURN_NAMES = ("mask", "coord_str", "float", "count", "normalized_str",)
+    FUNCTION = "convert"
+
+    def convert(self, text_list_1, text_list_2, text_list_3, text_list_4, text_list_5,
+                mask_width, mask_height, sampling_method, interpolation,
+                tension, repeat_output, float_output_type, min_value=0.0, max_value=1.0):
+        import torch
+        import numpy as np
+        import json
+
+        # Convert text lists to lists of dictionaries
+        text_lists = [text_list_1, text_list_2, text_list_3, text_list_4, text_list_5]
+        coordinates = []
+        for text_list in text_lists:
+            if text_list:
+                try:
+                    coords = json.loads(text_list)
+                    coordinates.extend(coords)
+                except json.JSONDecodeError:
+                    raise ValueError(f"Invalid JSON format in text list: {text_list}")
+
+        # Extract x and y values
+        x_values = [coord['x'] for coord in coordinates]
+        y_values = [coord['y'] for coord in coordinates]
+
+        # Normalize y-values between min_value and max_value
+        min_y, max_y = min(y_values), max(y_values)
+        normalized_y_values = [min_value + ((y - min_y) / (max_y - min_y)) * (max_value - min_value) for y in y_values]
+
+        # Prepare output float based on the selected type
+        if float_output_type == 'list':
+            out_floats = normalized_y_values * repeat_output
+        elif float_output_type == 'pandas series':
+            try:
+                import pandas as pd
+            except ImportError:
+                raise Exception("TextListToSplineData: pandas is not installed. Please install pandas to use this output_type.")
+            out_floats = pd.Series(normalized_y_values * repeat_output)
+        elif float_output_type == 'tensor':
+            out_floats = torch.tensor(normalized_y_values * repeat_output, dtype=torch.float32)
+        else:
+            raise ValueError(f"Unknown float_output_type: {float_output_type}")
+
+        # Create masks based on normalized y-values
+        mask_tensors = []
+        for y in normalized_y_values:
+            mask = torch.full((mask_height, mask_width, 3), y, dtype=torch.float32)
+            mask_tensors.append(mask)
+
+        # Stack and process mask tensors
+        masks_out = torch.stack(mask_tensors)
+        masks_out = masks_out.repeat(repeat_output, 1, 1, 1)
+        masks_out = masks_out.mean(dim=-1)
+
+        # Prepare coordinate strings
+        coord_str = json.dumps(coordinates)
+        normalized_str = coord_str
+        count = len(out_floats)
+
+        return (masks_out, coord_str, out_floats, count, normalized_str)
+    
